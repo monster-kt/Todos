@@ -1,0 +1,236 @@
+<!--
+ * @description: 主页面
+ * @version: 1.0
+ * @Date: 2021-04-12 13:28:00
+ * @LastEditors: surui
+ * @LastEditTime: 2021-04-13 19:29:01
+ * @FilePath: \VSwork\Ajax\todo\public\index.html
+-->
+<!DOCTYPE html>
+<html lang="cn">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List</title>
+    <!-- 进度条样式 -->
+    <link rel="stylesheet" href="assets/css/nprogress.css">
+    <!-- 全局样式 -->
+    <link rel="stylesheet" href="assets/css/index.css">
+</head>
+
+<body class="learn-bar">
+    <section class="todoapp">
+        <header class="header">
+            <h1>todos</h1>
+            <input class="new-todo" placeholder="What needs to be done?" autofocus id="add">
+        </header>
+        <section class="main">
+            <input id="toggle-all" class="toggle-all" type="checkbox">
+            <label for="toggle-all">Mark all as complete</label>
+            <ul class="todo-list" id="todo-list">
+
+            </ul>
+        </section>
+        <footer class="footer">
+            <span class="todo-count"><strong id="count">0</strong> items left</span>
+            <ul class="filters" id="filters">
+                <li>
+                    <a class="selected" href="#/all">All</a>
+                </li>
+                <li>
+                    <a href="#/active">Active</a>
+                </li>
+                <li>
+                    <a href="#/completed">Completed</a>
+                </li>
+            </ul>
+            <button class="clear-completed" id="clear-completed">Clear completed</button>
+        </footer>
+    </section>
+    <script src="assets/js/jquery-1.12.4.min.js"></script>
+    <script src="assets/js/template-web.js"></script>
+    <script src="assets/js/nprogress.js"></script>
+    <script id="taskTpl" type="text/html">
+        {{each taskAry}}
+        <li class="{{$value.completed?'completed':'view'}}">
+            <div class="view">
+                <input class="toggle" type="checkbox" {{$value.completed?'checked':''}}>
+                <label>{{$value.title}}</label>
+                <button class="destroy" data-id="{{$value._id}}"></button>
+            </div>
+            <input class="edit" value="{{$value.title}}">
+        </li>
+        {{/each}}
+    </script>
+    <script>
+        const taskbox = $('#todo-list');
+        const taskInp = $('#add');
+        let taskAry = [];
+        // 计算未完成的数量
+        function unCompleted() {
+            let count = 0;
+            // 将未完成的任务过滤到新数组中
+            const newAry = taskAry.filter(item => item.completed == false);
+            //    新数组的长度就是未完成的数量
+            count = newAry.length;
+            $('#count').text(count);
+        }
+
+        unCompleted();
+        // 渲染基本页面
+        // 封装渲染函数
+        function render(ary) {
+            const html = template('taskTpl', { taskAry: ary });
+            taskbox.html(html);
+            unCompleted();
+        };
+
+        // 设置全局事件 当有ajax请求时触发
+        $(document).on('ajaxStart', function () {
+            NProgress.start();
+        });
+        $(document).on('ajaxComplete', function () {
+            NProgress.done();
+        });
+
+        // 向服务器端发送请求 获取已经存在的任务
+        function all() {
+            $.ajax({
+                url: '/todo/task',
+                type: 'get',
+                success: function (response) {
+                    taskAry = response;
+                    render(taskAry);
+                }
+            });
+        }
+        all();
+
+        // 功能模块
+        // addTask
+        taskInp.on('keyup', function (e) {
+            if (e.keyCode == 13) {
+                let title = $(this).val();
+                if (title.trim().length == 0) {
+                    alert('请输入任务！')
+                    return;
+                }
+                $.ajax({
+                    type: 'post',
+                    url: '/todo/addTask',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ title }),
+                    success: function (response) {
+                        taskAry.push(response);
+                        // 清空文本框中的内容
+                        taskInp.val('');
+                        // 重新渲染页面
+                        render(taskAry);
+                    }
+                })
+            }
+            else return;
+        })
+
+        // deleteTask
+        // 点击删除按钮触发 ul 身上的点击事件
+        taskbox.on('click', '.destroy', function () {
+            const id = $(this).attr('data-id');
+            $.ajax({
+                type: 'get',
+                url: 'todo/deleteTask',
+                data: { id },
+                success: function (response) {
+                    const index = taskAry.findIndex(item => item._id == response._id)
+                    // 将任务从数组中删除
+                    taskAry.splice(index, 1);
+                    // 重新将任务中的元素显示在页面中
+                    render(taskAry);
+                }
+            });
+        })
+
+        // modifyTask
+        // 改变任务名称前面的复选框时触发
+        taskbox.on('change', '.toggle', function () {
+            const status = $(this).is(':checked');
+            const _id = $(this).siblings('button').attr('data-id');
+            $.ajax({
+                type: 'post',
+                url: '/todo/modifyTask',
+                data: JSON.stringify({ _id, status }),
+                contentType: 'application/json',
+                success: function (response) {
+                    const task = taskAry.find(item => item._id == response._id);
+                    // 因为是复杂数据类型 这里进行的是浅拷贝 所以相当于修改了地址里的内容
+                    task.completed = response.status;
+                    render(taskAry);
+                }
+            });
+        });
+        // 显示双击的样式
+        taskbox.on('dblclick', 'label', function () {
+            // 添加类名 处于编辑状态
+            $(this).parent().parent().addClass('editing');
+            // 双击后 获取焦点并显示原有任务名
+            $(this).parent().siblings('input').val('').focus().val($(this).text());
+        })
+        // 改变任务名
+        taskbox.on('blur', '.edit', function () {
+            const title = $(this).val();
+            const _id = $(this).siblings('.view').find('button').attr('data-id');
+            $.ajax({
+                type: 'post',
+                url: '/todo/modifyTask',
+                data: JSON.stringify({ _id, title }),
+                contentType: 'application/json',
+                success: function (response) {
+                    const task = taskAry.find(item => item._id == response._id);
+                    // 因为是复杂数据类型 这里进行的是浅拷贝 所以相当于修改了地址里的内容
+                    task.title = response.title;
+                    render(taskAry);
+                }
+            })
+        })
+
+        // 显示不同状态任务列表
+        $("#filters").on('click', 'li', function () {
+            const a = $(this).find('a');
+            // 添加页脚选项点击样式
+            a.addClass('selected').parent().siblings('li').find('a').removeClass('selected');
+            const text = a.text();
+            // 根据选项显示相应的页面
+            if (text == 'All') {
+                all();
+            } else if (text == 'Active') {
+                const newAry = taskAry.filter(item => item.completed == false);
+                render(newAry)
+            } else {
+                const newAry = taskAry.filter(item => item.completed == true);
+                render(newAry);
+            }
+
+        })
+
+        // 清除所有已完成的任务
+        $('#clear-completed').on('click', function () {
+            $.ajax({
+                type: 'get',
+                url: '/todo/clearTask',
+                success: function (response) {
+                    let newAry = [];
+                    taskAry.forEach(function (value, index, arr) {
+                        if (value.completed == false) {
+                            newAry.push(value);
+                        }
+                    });
+                    taskAry = newAry;
+                    render(taskAry);
+                }
+            })
+        })
+    </script>
+</body>
+
+</html>
