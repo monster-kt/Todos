@@ -1,5 +1,5 @@
 ## 项目简介
-本项目名称为todos，仿照了https://todomvc.com/examples/jquery/项目，主要是一个代办清单，可以在这里将我们需要进行的任务进行记录。
+本项目名称为todos，仿照了[todomvc](https://todomvc.com/examples/jquery/)项目，主要是一个代办清单，可以在这里将我们需要进行的任务进行记录。
 ## 技术选型
 页面为响应式布局，后台使用node.js+express，数据库为mongodb，数据交换采用Ajax+jQuery。
 ## 功能描述
